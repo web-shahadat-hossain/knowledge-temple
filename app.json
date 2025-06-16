@@ -10,13 +10,8 @@
       "resizeMode": "contain",
       "backgroundColor": "#387ade"
     },
-    "platforms": [
-      "ios",
-      "android"
-    ],
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "platforms": ["ios", "android"],
+    "assetBundlePatterns": ["**/*"],
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -28,7 +23,7 @@
         "foregroundImage": "./assets/Splash (1).png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.phrubel42.knowledgetemple",
+      "package": "com.shahadat25.knowledgetemple",
       "versionCode": 3
     },
     "web": {
