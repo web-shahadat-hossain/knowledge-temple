@@ -1,16 +1,16 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import React from 'react';
-import ContentWrapper from '@/components/contentwrapper';
-import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { Colors } from '@/constants/Colors';
-import PrimaryButton from '@/components/common/PrimaryButton';
-import Header from '@/components/header';
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React from "react";
+import ContentWrapper from "@/components/contentwrapper";
+import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { Colors } from "@/constants/Colors";
+import PrimaryButton from "@/components/common/PrimaryButton";
+import Header from "@/components/header";
 
 const PaymentDesc = () => {
   return (
     <ContentWrapper>
-      <Header heading={'Payment'} showLeft />
+      <Header heading={"Payment"} showLeft />
 
       {/* Container */}
       <View style={styles.container}>
@@ -64,11 +64,11 @@ const PaymentDesc = () => {
         <PrimaryButton
           style={styles.button}
           textStyle={{ color: Colors.white }}
-          onPress={() => router.push('/pointsCard')}
-          text={'Proceed to Pay'}
+          onPress={() => router.push("/pointsCard")}
+          text={"Proceed to Pay"}
           isOutlined
           renderIcon={() => (
-            <Feather name="arrow-right" size={24} color={'white'} />
+            <Feather name="arrow-right" size={24} color={"white"} />
           )}
         />
       </View>
@@ -85,12 +85,12 @@ const styles = StyleSheet.create({
   },
   heading: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 20,
   },
   subHeading: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.black,
     marginTop: 10,
   },
@@ -101,14 +101,14 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     color: Colors.black,
   },
 
   categories: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 10,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     margin: 15,
   },
   category: {
@@ -118,13 +118,13 @@ const styles = StyleSheet.create({
     marginRight: 5,
     borderColor: Colors.placeholder,
     borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   categoryText: {
     color: Colors.black,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   estimatedContainer: {
     backgroundColor: Colors.placeholder,
@@ -135,29 +135,29 @@ const styles = StyleSheet.create({
   },
   estimated: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 20,
     // margin: 15,
   },
   estimated1: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 10,
   },
   estimatedText: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   text2: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     color: Colors.black,
     marginTop: 10,
   },
   timeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   button: {
     marginTop: 120,
