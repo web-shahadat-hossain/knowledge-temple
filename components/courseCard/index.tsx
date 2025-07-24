@@ -1,70 +1,112 @@
-import { Colors } from '@/constants/Colors';
-// import { horizontalScale, moderateScale } from '@/utils/metrices';
-import { Entypo, Feather } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import AntDesign from '@expo/vector-icons/AntDesign';
-import EvilIcons from '@expo/vector-icons/EvilIcons';
+import { Colors } from "@/constants/Colors";
+import { Entypo, Feather, AntDesign, EvilIcons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   ImageBackground,
   FlatList,
   ActivityIndicator,
-} from 'react-native';
-import usePostQuery from '@/hooks/post-query.hook';
-import { apiUrls } from '@/apis/apis';
-import { router } from 'expo-router';
-import { useSelector } from 'react-redux';
+  Dimensions,
+  ViewStyle,
+  ImageStyle,
+  TextStyle,
+  StyleSheet,
+} from "react-native";
+import usePostQuery from "@/hooks/post-query.hook";
+import { apiUrls } from "@/apis/apis";
+import { router } from "expo-router";
+import { useSelector } from "react-redux";
+
+const { width } = Dimensions.get("window");
+
+interface SimilarCourseProps {
+  screenName?: string;
+  showRecommended?: boolean;
+  showSimilar?: boolean;
+  courseId?: string;
+  subjectId?: string;
+  keyword?: string;
+  emptyMessage?: string;
+  onPress?: (course: any) => void;
+}
+
+interface Styles {
+  container: ViewStyle;
+  loader: ViewStyle;
+  listContent: ViewStyle;
+  separator: ViewStyle;
+  courseCard: ViewStyle;
+  imageContainer: ViewStyle;
+  courseImage: ImageStyle;
+  newCourseBadge: ViewStyle;
+  newCourseText: TextStyle;
+  courseContent: ViewStyle;
+  headerRow: ViewStyle;
+  courseTitle: TextStyle;
+  ratingContainer: ViewStyle;
+  ratingText: TextStyle;
+  courseDescription: TextStyle;
+  footerRow: ViewStyle;
+  metaContainer: ViewStyle;
+  metaItem: ViewStyle;
+  metaText: TextStyle;
+  priceText: TextStyle;
+  actionContainer: ViewStyle;
+  actionButton: ViewStyle;
+  emptyListContainer: ViewStyle;
+  emptyListText: TextStyle;
+}
 
 const SimilarCourse = ({
-  screenName = 'home',
+  screenName = "home",
   showRecommended = false,
-  showSimiller = false,
-  courseId = '',
-  subjectId = '',
-  keyword = '',
-  emptyMessage = 'Empty list',
-}: any) => {
+  showSimilar = false,
+  courseId = "",
+  subjectId = "",
+  keyword = "",
+  emptyMessage = "Empty list",
+  onPress,
+}: SimilarCourseProps) => {
   const [courses, setCourses] = useState<any[]>([]);
-  const { postQuery, loading } = usePostQuery();
+  const { postQuery, loading: isLoading } = usePostQuery();
   const [refreshing, setRefreshing] = useState(false);
-  const user = useSelector((state) => state.user.user);
+  const user = useSelector((state: any) => state.user.user);
 
   const fetchCourses = async () => {
-    setRefreshing(true); // Start refreshing
+    setRefreshing(true);
     postQuery({
       url: apiUrls.course.getCourseList,
       onSuccess: (res: any) => {
-        console.log('Fetched Courses:', res.data);
-        setCourses(res.data || []);
+        setCourses(res.data?.docs || []);
         setRefreshing(false);
       },
       onFail: (err: any) => {
-        console.error('Error fetching courses:', err);
-        setRefreshing(false); // Hide refresh indicator even on failure
+        console.error("Error fetching courses:", err);
+        setRefreshing(false);
       },
       postData: {
         page: 1,
-        search: keyword,
-        subjectId: subjectId || '', // optional - filter
-        standardId: user?.stdId || '', // optional - filter
-        type: showRecommended ? 'R' : showSimiller ? 'S' : '', // 'R' for recomended and 'S' for similar course
-        courseId: showSimiller ? courseId : '', // courseId mandedary for similar course
-      }, // No token, no extra data needed
+        search: "",
+        subjectId: "", // optional - filter
+        standardId: "", // optional - filter
+        type: showRecommended ? "R" : showSimilar ? "S" : "", // 'R' for recomended and 'S' for similar course
+      },
     });
   };
-
+  console.log(user?.stdId || "");
   useEffect(() => {
     fetchCourses();
-  }, [keyword]);
+  }, [keyword, courseId, subjectId]);
 
-  const handlePress = (id) => {
-    if (screenName == 'home') {
+  const handlePress = (course: any) => {
+    if (onPress) {
+      onPress(course);
+    } else if (screenName === "home") {
       router.push(`/courses`);
-    } else if (screenName == 'courses') {
-      router.push({ pathname: `/selectCourse`, params: { id: id } });
+    } else if (screenName === "courses") {
+      router.push({ pathname: `/selectCourse`, params: { id: course._id } });
     }
   };
 
@@ -72,61 +114,84 @@ const SimilarCourse = ({
     return (
       <TouchableOpacity
         style={styles.courseCard}
-        onPress={() => handlePress(item._id)}
+        onPress={() => handlePress(item)}
+        activeOpacity={0.8}
       >
-        <ImageBackground
-          source={{ uri: item.thumbnail || 'https://via.placeholder.com/300' }}
-          style={styles.courseImage}
-        />
-        <View style={styles.newCourseBadge}>
-          <Text style={styles.newCourseText}>New Course</Text>
+        <View style={styles.imageContainer}>
+          <ImageBackground
+            source={{
+              uri: item.thumbnail || "https://via.placeholder.com/300",
+            }}
+            style={styles.courseImage}
+            resizeMode="cover"
+          >
+            {item.isNew && (
+              <View style={styles.newCourseBadge}>
+                <Text style={styles.newCourseText}>New</Text>
+              </View>
+            )}
+          </ImageBackground>
         </View>
-        <View
-          style={{
-            padding: 10,
-          }}
-        >
-          <View style={styles.completeProfileContainer}>
-            <Text style={styles.courseTitle}>
-              {item.title || 'Course Title'}
+
+        <View style={styles.courseContent}>
+          <View style={styles.headerRow}>
+            <Text style={styles.courseTitle} numberOfLines={2}>
+              {item.title || "Course Title"}
             </Text>
             <View style={styles.ratingContainer}>
-              <Text style={styles.viewAllText}>{item.rating || '4.5'}</Text>
-              <AntDesign style={styles.starIcon} name="star" size={18} />
+              <AntDesign name="star" size={16} color={Colors.warning} />
+              <Text style={styles.ratingText}>{item.rating || "4.5"}</Text>
             </View>
           </View>
-          <Text style={styles.courseDescription}>
-            {item.description || 'No description available.'}
+
+          <Text style={styles.courseDescription} numberOfLines={2}>
+            {item.description || "No description available."}
           </Text>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                // justifyContent: 'space-between',
-                columnGap: 10,
-                alignItems: 'center',
-              }}
-            >
-              <Entypo name="back-in-time" size={24} color="black" />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: '500',
-                  color: Colors.placeholder,
-                }}
-              >
-                &bull; {item?.duration}
-              </Text>
+
+          <View style={styles.footerRow}>
+            <View style={styles.metaContainer}>
+              <View style={styles.metaItem}>
+                <Entypo name="back-in-time" size={16} color={Colors.gray} />
+                <Text style={styles.metaText}>{item.duration || "N/A"}</Text>
+              </View>
+              <View style={styles.metaItem}>
+                {item.offer?.discountPercentage ? (
+                  <>
+                    <Text
+                      style={[
+                        styles.priceText,
+                        {
+                          textDecorationLine: "line-through",
+                          color: Colors.gray,
+                        },
+                      ]}
+                    >
+                      ₹{item.price || "0"}
+                    </Text>
+                    <Text style={[styles.priceText, { color: Colors.primary }]}>
+                      ₹
+                      {Math.floor(
+                        item.price * (1 - item.offer.discountPercentage / 100)
+                      )}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.priceText}>₹{item.price || "0"}</Text>
+                )}
+              </View>
             </View>
-            <View style={styles.bookmarkContainer}>
-              <EvilIcons name="sc-telegram" size={28} color="black" />
-              <Feather name="bookmark" size={24} color="black" />
+
+            <View style={styles.actionContainer}>
+              <TouchableOpacity style={styles.actionButton}>
+                <EvilIcons
+                  name="sc-telegram"
+                  size={24}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton}>
+                <Feather name="bookmark" size={20} color={Colors.primary} />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -136,84 +201,156 @@ const SimilarCourse = ({
 
   return (
     <View style={styles.container}>
-      {loading && <ActivityIndicator size="large" color={Colors.primary} />}
-      <FlatList
-        data={courses?.docs}
-        renderItem={renderCourseItem}
-        keyExtractor={(item) => item._id.toString()}
-        ItemSeparatorComponent={() => (
-          <View
-            style={{
-              marginRight: 20,
-            }}
-          />
-        )}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        refreshing={refreshing} // Pull-to-refresh state
-        onRefresh={fetchCourses} // Triggers fetch when pulled down
-        horizontal
-        ListEmptyComponent={() => (
-          <View style={styles.emptyListContainer}>
-            <Text style={styles.emptyListText}>{emptyMessage}</Text>
-          </View>
-        )}
-      />
+      {isLoading ? (
+        <ActivityIndicator
+          size="large"
+          color={Colors.primary}
+          style={styles.loader}
+        />
+      ) : (
+        <FlatList
+          data={courses}
+          renderItem={renderCourseItem}
+          keyExtractor={(item) => item._id.toString()}
+          contentContainerStyle={styles.listContent}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          refreshing={refreshing}
+          onRefresh={fetchCourses}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyListContainer}>
+              <Text style={styles.emptyListText}>{emptyMessage}</Text>
+            </View>
+          )}
+        />
+      )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 10 },
-  errorText: { color: 'red', textAlign: 'center', marginTop: 20 },
-  starIcon: { color: '#D97706' },
-  completeProfileContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+const styles = StyleSheet.create<Styles>({
+  container: {
+    flex: 1,
+    paddingVertical: 12,
   },
-  viewAllText: { color: Colors.placeholder, fontWeight: 'bold' },
-  newCourseBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: Colors.primary,
-    padding: 5,
-    borderRadius: 10,
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  newCourseText: { fontWeight: 'bold' },
-  ratingContainer: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  bookmarkContainer: {
-    flexDirection: 'row',
-    // justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    marginTop: 5,
+  listContent: {
+    paddingHorizontal: 16,
+  },
+  separator: {
+    width: 16,
   },
   courseCard: {
-    width: 320,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-    // padding: 10,
-    borderRadius: 10,
-    marginBottom: 10,
-    elevation: 3,
+    width: width * 0.8,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    overflow: "hidden",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  courseImage: { width: '100%', height: 150, borderRadius: 20 },
+  imageContainer: {
+    height: 160,
+  },
+  courseImage: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "flex-start",
+  },
+  newCourseBadge: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomRightRadius: 8,
+    borderTopLeftRadius: 8,
+    alignSelf: "flex-start",
+    margin: 8,
+  },
+  newCourseText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  courseContent: {
+    padding: 16,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
   courseTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.black,
-    marginTop: 5,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.dark,
+    flex: 1,
+    marginRight: 8,
   },
-  courseDescription: { color: Colors.placeholder },
+  ratingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ratingText: {
+    fontSize: 14,
+    color: Colors.dark,
+    marginLeft: 4,
+  },
+  courseDescription: {
+    fontSize: 14,
+    color: Colors.gray,
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  metaContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 12,
+    color: Colors.gray,
+  },
+  priceText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.dark,
+  },
+  actionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionButton: {
+    padding: 4,
+  },
   emptyListContainer: {
-    minWidth: 340,
-    justifyContent: 'center',
+    width: width - 32,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
   },
   emptyListText: {
-    color: Colors.placeholder,
+    color: Colors.gray,
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
 

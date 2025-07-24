@@ -1,220 +1,334 @@
-import { apiUrls } from '@/apis/apis';
-import ContentWrapper from '@/components/contentwrapper';
-import SimilarCourse from '@/components/courseCard';
-import Loader from '@/components/loader';
-import SimpleInput from '@/components/simpleInput';
-import { Colors } from '@/constants/Colors';
-import usePostQuery from '@/hooks/post-query.hook';
-import { moderateScale } from '@/utils/metrices';
+import { apiUrls } from "@/apis/apis";
+import ContentWrapper from "@/components/contentwrapper";
+import Loader from "@/components/loader";
+import SimpleInput from "@/components/simpleInput";
+import { Colors } from "@/constants/Colors";
+import usePostQuery from "@/hooks/post-query.hook";
+import { moderateScale } from "@/utils/metrices";
 import {
   AntDesign,
   Feather,
   FontAwesome,
   FontAwesome6,
-  Octicons,
-} from '@expo/vector-icons';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ImageBackground } from 'react-native';
+  Ionicons,
+  MaterialIcons,
+} from "@expo/vector-icons";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
+import { shareAsync } from "expo-sharing";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
-  Image,
   StyleSheet,
   ScrollView,
-  Dimensions,
-} from 'react-native';
-
-// const studyMaterials = [
-//   {
-//     id: '1',
-//     title: 'UI/UX Design Course',
-//     duration: '2h 30min',
-//     category: 'Math',
-//   },
-//   {
-//     id: '2',
-//     title: 'UI/UX Design Course',
-//     duration: '2h 30min',
-//     category: 'Math',
-//   },
-//   {
-//     id: '3',
-//     title: 'UI/UX Design Course',
-//     duration: '2h 30min',
-//     category: 'Math',
-//   },
-//   {
-//     id: '4',
-//     title: 'UI/UX Design Course',
-//     duration: '2h 30min',
-//     category: 'Math',
-//   },
-// ];
-
-const courses = [
-  {
-    id: '1',
-    title: 'UI/UX Design Course',
-    description: 'Discover the essential principles of UI/UX design.',
-  },
-  {
-    id: '2',
-    title: 'UI/UX Design Course',
-    description: 'Discover the essential principles of UI/UX design.',
-  },
-  {
-    id: '3',
-    title: 'UI/UX Design Course',
-    description: 'Discover the essential principles of UI/UX design.',
-  },
-  {
-    id: '4',
-    title: 'UI/UX Design Course',
-    description: 'Discover the essential principles of UI/UX design.',
-  },
-];
+  ImageBackground,
+  Alert,
+  Platform,
+  Linking,
+  Modal,
+} from "react-native";
+import YoutubePlayer from "react-native-youtube-iframe";
 
 const StudyMaterialsScreen = () => {
   const tabBarHeight = useBottomTabBarHeight();
-  const [searchQuery, setSearchQuery] = useState('');
-  // const [filteredCourses, setFilteredCourses] = useState(courses);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<
+    "all" | "video" | "pdf" | "practical"
+  >("all");
   const [material, setMaterial] = useState<any[]>([]);
   const [materialList, setMaterialList] = useState<any[]>([]);
   const { postQuery, loading } = usePostQuery();
+  const [videoVisible, setVideoVisible] = useState(false);
+  const [currentVideoId, setCurrentVideoId] = useState("");
+  const playerRef = useRef(null);
 
-  // const handleSearch = (text) => {
-  //     setSearchQuery(text);
-  //     if (text.trim() === '') {
-  //       setFilteredCourses(courses);
-  //     } else {
-  //       const filtered = courses.filter((course) =>
-  //         course.title.toLowerCase().includes(text.toLowerCase())
-  //       );
-  //       setFilteredCourses(filtered);
-  //     }
-  //   };
+  // Extract YouTube video ID from URL
+  const getYouTubeId = (url: string) => {
+    const regExp =
+      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return match && match[2].length === 11 ? match[2] : null;
+  };
 
-  // fetch course materials
-  // This api have no data
-  const fetchMaterials = async () => {
+  // Convert Google Drive URL to direct download URL
+  const getGoogleDriveDirectUrl = (url: string) => {
+    const fileId =
+      url.match(/\/file\/d\/([^\/]+)/)?.[1] || url.match(/id=([^&]+)/)?.[1];
+    return fileId
+      ? `https://drive.google.com/uc?export=download&id=${fileId}`
+      : null;
+  };
+
+  // Function to handle material download
+  const handleDownload = async (
+    url: string,
+    title: string,
+    type: "video" | "pdf"
+  ) => {
+    if (!url) {
+      Alert.alert("Error", "No file available for download");
+      return;
+    }
+
+    try {
+      // For Android, request permissions
+      if (Platform.OS === "android") {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission required",
+            "Please allow storage access to download files"
+          );
+          return;
+        }
+      }
+
+      Alert.alert("Downloading", "Please wait while we download your file...");
+
+      // Handle Google Drive links
+      let downloadUrl = url.includes("drive.google.com")
+        ? getGoogleDriveDirectUrl(url) || url
+        : url;
+
+      // Get the file extension
+      const fileExtension = type === "pdf" ? "pdf" : "mp4";
+      const fileName = `${title.replace(/\s+/g, "_")}.${fileExtension}`;
+
+      // Download the file
+      const downloadResumable = FileSystem.createDownloadResumable(
+        downloadUrl,
+        FileSystem.documentDirectory + fileName,
+        {}
+      );
+
+      const { uri } = await downloadResumable.downloadAsync();
+
+      // Save to media library or share
+      if (Platform.OS === "ios" || type === "pdf") {
+        await shareAsync(uri);
+      } else {
+        await MediaLibrary.createAssetAsync(uri);
+      }
+
+      Alert.alert("Success", "File downloaded successfully!");
+    } catch (error) {
+      console.error("Download error:", error);
+      Alert.alert("Error", "Failed to download file. Please try again.");
+    }
+  };
+
+  // Function to open material
+  const openMaterial = (item: any) => {
+    if (item.materialType === "video") {
+      if (
+        item.materialUrl.includes("youtube.com") ||
+        item.materialUrl.includes("youtu.be")
+      ) {
+        const videoId = getYouTubeId(item.materialUrl);
+        if (videoId) {
+          setCurrentVideoId(videoId);
+          setVideoVisible(true);
+        } else {
+          Linking.openURL(item.materialUrl).catch((err) => {
+            Alert.alert("Error", "Failed to open video. Please try again.");
+          });
+        }
+      } else {
+        WebBrowser.openBrowserAsync(item.materialUrl).catch((err) => {
+          Alert.alert("Error", "Failed to open video. Please try again.");
+        });
+      }
+    } else if (item.materialType === "pdf") {
+      if (item.materialUrl) {
+        // Handle Google Drive PDFs
+        if (item.materialUrl.includes("drive.google.com")) {
+          const directUrl = getGoogleDriveDirectUrl(item.materialUrl);
+          if (directUrl) {
+            WebBrowser.openBrowserAsync(directUrl).catch((err) => {
+              Alert.alert("Error", "Failed to open PDF. Please try again.");
+            });
+          } else {
+            Alert.alert("Error", "Invalid Google Drive URL");
+          }
+        } else {
+          // Regular PDF URL
+          WebBrowser.openBrowserAsync(item.materialUrl).catch((err) => {
+            Alert.alert("Error", "Failed to open PDF. Please try again.");
+          });
+        }
+      } else {
+        Alert.alert("Error", "No PDF URL available");
+      }
+    }
+  };
+
+  // Fetch course materials
+  const fetchMaterials = async (search = "", type = "") => {
     postQuery({
       url: apiUrls.material.getCourseMaterials,
       onSuccess: (res: any) => {
-        // console.log('Fetched Materials:>>>>', res.data);
-        setMaterial(res.data || []);
+        setMaterial(res.data?.docs || []);
       },
       onFail: (err: any) => {
-        console.error('Error fetching courses:', err);
+        console.error("Error fetching courses:", err);
       },
       postData: {
         page: 1,
-        search: '',
-        subjectId: '',
-        standardId: '',
+        search: search,
+        subjectId: "",
+        standardId: "",
+        type: type,
       },
     });
   };
 
-  // call fetchMaterials
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
-
-  // material list func
-  const fetchMaterialsList = async () => {
+  // Fetch material list
+  const fetchMaterialsList = async (search = "", type = "") => {
     postQuery({
       url: apiUrls.material.getMaterials,
       onSuccess: (res: any) => {
-        console.log('Fetched Materials:>>>>', res.data);
-        setMaterialList(res.data || []);
+        setMaterialList(res.data?.docs || []);
       },
       onFail: (err: any) => {
-        console.error('Error fetching courses:', err);
+        console.error("Error fetching materials:", err);
       },
       postData: {
         page: 1,
-        search: '',
-        subjectId: '',
-        standardId: '',
-        type: 'p', // V - Video, P - PDF
+        search: search,
+        subjectId: "",
+        standardId: "",
+        type: type,
       },
     });
   };
 
+  // Handle search
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    fetchMaterials(
+      text,
+      activeTab === "all" ? "" : activeTab === "video" ? "v" : "p"
+    );
+    fetchMaterialsList(
+      text,
+      activeTab === "all" ? "" : activeTab === "video" ? "v" : "p"
+    );
+  };
+
+  // Handle tab change
+  const handleTabChange = (tab: "all" | "video" | "pdf" | "practical") => {
+    setActiveTab(tab);
+    const type = tab === "all" ? "" : tab === "video" ? "v" : "p";
+    fetchMaterials(searchQuery, type);
+    fetchMaterialsList(searchQuery, type);
+  };
+
   useEffect(() => {
+    fetchMaterials();
     fetchMaterialsList();
   }, []);
 
-  const CourseItem = ({ item }: { item: any }) => {
+  // Render material item
+  const renderMaterialItem = ({ item }: { item: any }) => {
+    const isVideo = item.materialType === "video";
+    const iconName = isVideo ? "play-circle" : "file-pdf";
+    const IconComponent = isVideo ? FontAwesome : MaterialIcons;
+    const durationText = isVideo ? "Video" : "PDF";
+
     return (
-      <TouchableOpacity onPress={() => router.push('/live')}>
-        <View style={styles.courseItem}>
-          <View style={styles.courseTextContainer}>
-            <Text style={styles.courseTitle}>{item?.title}</Text>
-          </View>
+      <TouchableOpacity
+        style={styles.materialItem}
+        onPress={() => openMaterial(item)}
+      >
+        <View style={styles.materialIconContainer}>
+          <IconComponent
+            name={iconName}
+            size={24}
+            color={isVideo ? Colors.primary : Colors.danger}
+          />
+        </View>
 
-          {/*      {/* Tags */}
-          <View style={styles.tagsContainer}>
-            <View style={styles.courseDurationContainer}>
-              <FontAwesome6 name="clock-rotate-left" size={15} color="black" />
-              <Text style={styles.courseDuration}>.{item?.duration}</Text>
-            </View>
+        <View style={styles.materialInfo}>
+          <Text style={styles.materialTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.materialDescription} numberOfLines={1}>
+            {item.description}
+          </Text>
 
-            <View style={styles.courseTags}>
-              <Text style={styles.courseCategory}>{item?.category}</Text>
-              <TouchableOpacity style={styles.downloadButton}>
-                <AntDesign name="download" size={15} color="black" />
-              </TouchableOpacity>
-            </View>
+          <View style={styles.materialMeta}>
+            <Text style={styles.materialDuration}>{durationText}</Text>
+            <Text style={styles.materialCourse}>{item.courseId?.title}</Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.downloadButton}
+          onPress={() =>
+            handleDownload(item.materialUrl, item.title, item.materialType)
+          }
+        >
+          <AntDesign name="download" size={20} color={Colors.primary} />
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-  const CourseItems = ({ title, description }) => (
-    <TouchableOpacity style={{ justifyContent: 'space-evenly' }}>
-      <View style={styles.courseItem2}>
-        <Text style={styles.courseTitle}>{title}</Text>
-        <Text style={styles.courseDescription}>{description}</Text>
-        <TouchableOpacity style={styles.openButton}>
-          <Text style={styles.openText}>↗</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+  // Render featured course
+  const renderFeaturedCourse = () => {
+    if (material.length === 0) return null;
 
-  // This api have no data
-  const RenderCourseMaterials = ({ item }: { item: any }) => {
+    const featured = material[0];
+    const isVideo = featured.materialType === "video";
+
     return (
-      <TouchableOpacity style={styles.courseCard}>
-        <Loader visible={loading} />
+      <TouchableOpacity
+        style={styles.featuredCard}
+        onPress={() => openMaterial(featured)}
+      >
         <ImageBackground
-          source={{ uri: item?.thumbnail }}
-          style={styles.courseImage}
-        />
-        <View style={styles.newCourseBadge}>
-          <Octicons
-            style={styles.newCourseText}
-            name="video"
-            size={24}
-            color="black"
-          />
-        </View>
-        <View style={styles.completeProfileContainer}>
-          <Text style={styles.courseTitle}>{item?.title}</Text>
-        </View>
-        <Text style={styles.courseDescription}>
-          {item?.description || 'No description available.'}
-        </Text>
-        <View style={styles.courseDurationContainer}>
-          <FontAwesome6 name="clock-rotate-left" size={15} color="black" />
-          <Text style={styles.courseDuration}>{item?.duration}</Text>
+          source={{
+            uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR2WUisIb3DyB667hgienksLQoJi5yFh26pqg&s",
+          }}
+          style={styles.featuredImage}
+          resizeMode="cover"
+        >
+          <View style={styles.featuredBadge}>
+            {isVideo ? (
+              <Ionicons name="play" size={20} color={Colors.white} />
+            ) : (
+              <MaterialIcons
+                name="picture-as-pdf"
+                size={20}
+                color={Colors.white}
+              />
+            )}
+          </View>
+        </ImageBackground>
+
+        <View style={styles.featuredContent}>
+          <Text style={styles.featuredTitle}>{featured.title}</Text>
+          <Text style={styles.featuredDescription} numberOfLines={2}>
+            {featured.description || "No description available"}
+          </Text>
+
+          <View style={styles.featuredMeta}>
+            <View style={styles.metaItem}>
+              <FontAwesome6 name="clock" size={14} color={Colors.text} />
+              <Text style={styles.metaText}>{isVideo ? "45 min" : "PDF"}</Text>
+            </View>
+
+            <View style={styles.metaItem}>
+              <FontAwesome name="book" size={14} color={Colors.text} />
+              <Text style={styles.metaText}>{featured.courseId?.title}</Text>
+            </View>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -226,116 +340,162 @@ const StudyMaterialsScreen = () => {
         paddingBottom: tabBarHeight,
       }}
     >
+      {/* YouTube Player Modal */}
+      <Modal
+        visible={videoVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setVideoVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.videoContainer}>
+            <YoutubePlayer
+              ref={playerRef}
+              height={300}
+              width="100%"
+              videoId={currentVideoId}
+              play={true}
+              onChangeState={(event) => {
+                if (event === "ended") {
+                  setVideoVisible(false);
+                }
+              }}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setVideoVisible(false)}
+          >
+            <Text style={styles.closeButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.welcomeContainer}>
             <Text style={styles.welcomeText}>Study Materials</Text>
           </View>
+
           <SimpleInput
-            placeholder="Search here"
+            placeholder="Search materials..."
             style={styles.searchInput}
             renderLeft={() => (
               <Feather name="search" size={20} color={Colors.placeholder} />
             )}
             value={searchQuery}
-            // onChangeText={handleSearch}
+            onChangeText={handleSearch}
           />
         </View>
 
         {/* Categories */}
         <View style={styles.categories}>
-          <TouchableOpacity style={styles.categoryActive}>
-            <Text style={styles.categoryText}>All</Text>
+          <TouchableOpacity
+            style={[
+              styles.category,
+              activeTab === "all" && styles.categoryActive,
+            ]}
+            onPress={() => handleTabChange("all")}
+          >
+            <Text
+              style={[
+                styles.categoryText,
+                activeTab === "all" && styles.categoryTextActive,
+              ]}
+            >
+              All
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.category}>
-            <Text style={styles.categoryText}>Videos</Text>
+
+          <TouchableOpacity
+            style={[
+              styles.category,
+              activeTab === "video" && styles.categoryActive,
+            ]}
+            onPress={() => handleTabChange("video")}
+          >
+            <Text
+              style={[
+                styles.categoryText,
+                activeTab === "video" && styles.categoryTextActive,
+              ]}
+            >
+              Videos
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.category}>
-            <Text style={styles.categoryText}>Books</Text>
+
+          <TouchableOpacity
+            style={[
+              styles.category,
+              activeTab === "pdf" && styles.categoryActive,
+            ]}
+            onPress={() => handleTabChange("pdf")}
+          >
+            <Text
+              style={[
+                styles.categoryText,
+                activeTab === "pdf" && styles.categoryTextActive,
+              ]}
+            >
+              PDFs
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.category}>
-            <Text style={styles.categoryText}>Practical</Text>
+
+          <TouchableOpacity
+            style={[
+              styles.category,
+              activeTab === "practical" && styles.categoryActive,
+            ]}
+            onPress={() => handleTabChange("practical")}
+          >
+            <Text
+              style={[
+                styles.categoryText,
+                activeTab === "practical" && styles.categoryTextActive,
+              ]}
+            >
+              Practical
+            </Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false}>
-          <TouchableOpacity style={styles.courseCard}>
-            <Loader visible={loading} />
-            <ImageBackground
-              source={{
-                uri: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR2WUisIb3DyB667hgienksLQoJi5yFh26pqg&s',
-              }}
-              style={styles.courseImage}
-            />
-            <View style={styles.newCourseBadge}>
-              <Octicons
-                style={styles.newCourseText}
-                name="video"
-                size={24}
-                color="black"
-              />
-            </View>
-            <View style={styles.completeProfileContainer}>
-              <Text style={styles.courseTitle}>UI/UX Design Course</Text>
-            </View>
-            <Text style={styles.courseDescription}>
-              Lorem ipsum dolor sit amet, impedit! Nemo doloribus explicabo quia
-              eos aut! Voluptates accusantium similique pariatur.
-            </Text>
-            <View style={styles.courseDurationContainer}>
-              <FontAwesome6 name="clock-rotate-left" size={15} color="black" />
-              <Text style={styles.courseDuration}>2h 30min</Text>
-            </View>
-          </TouchableOpacity>
-          {/* Course materials*/}
-          <FlatList
-            data={material?.docs}
-            renderItem={RenderCourseMaterials}
-            keyExtractor={(item) => item._id.toString()}
-            showsVerticalScrollIndicator={false}
-          />
+          <Loader visible={loading} />
 
-          {/* Courses   */}
-          <View style={styles.completeProfileContainer}>
-            <Text style={styles.sectionTitle}>Top Reading for You</Text>
-            <Text style={styles.viewAllText}>View all</Text>
-          </View>
-          <FlatList
-            // data={materialList?.docs}
-            // keyExtractor={(item) => item.id}
-            // renderItem={({ item }) => (
-            //   <CourseItem
-            //     title={item.title}
-            //     duration={item.duration}
-            //     category={item.category}
-            //   />
-            // )}
-            data={material?.docs}
-            renderItem={CourseItem}
-            keyExtractor={(item) => item._id.toString()}
-            showsVerticalScrollIndicator={false}
-          />
+          {/* Featured Material */}
+          {renderFeaturedCourse()}
 
-          {/* reading course*/}
-          <View style={styles.completeProfileContainer1}>
-            <Text style={styles.sectionTitle}>Top Reading for You</Text>
-            <Text style={styles.viewAllText}>View all</Text>
+          {/* All Materials */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>All Study Materials</Text>
+            <TouchableOpacity>
+              <Text style={styles.viewAllText}>View all</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* course */}
+          <FlatList
+            data={material}
+            renderItem={renderMaterialItem}
+            keyExtractor={(item) => item._id}
+            scrollEnabled={false}
+            contentContainerStyle={styles.materialList}
+          />
+
+          {/* Recommended Materials */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recommended For You</Text>
+            <TouchableOpacity>
+              <Text style={styles.viewAllText}>View all</Text>
+            </TouchableOpacity>
+          </View>
 
           <FlatList
-            numColumns={2}
-            columnWrapperStyle={{ gap: 10 }}
-            contentContainerStyle={{
-              flexDirection: 'column',
-            }}
-            data={courses}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <CourseItems title={item.title} description={item.description} />
-            )}
+            data={materialList}
+            renderItem={renderMaterialItem}
+            keyExtractor={(item) => item._id}
+            scrollEnabled={false}
+            contentContainerStyle={styles.materialList}
           />
         </ScrollView>
       </View>
@@ -346,212 +506,196 @@ const StudyMaterialsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
-    padding: 20,
+    backgroundColor: Colors.background,
+    padding: moderateScale(16),
   },
   header: {
-    padding: 20,
-    paddingBottom: 5,
+    marginBottom: moderateScale(16),
   },
   welcomeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: moderateScale(20),
+    marginBottom: moderateScale(12),
   },
   welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: moderateScale(24),
+    fontWeight: "bold",
+    color: Colors.text,
   },
-
   searchInput: {
-    marginTop: 5,
-    marginBottom: 5,
-    padding: 5,
-    borderRadius: 10,
+    borderRadius: moderateScale(10),
+    backgroundColor: Colors.white,
+    paddingHorizontal: moderateScale(12),
   },
   categories: {
-    flexDirection: 'row',
-    marginBottom: 10,
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: moderateScale(16),
   },
   category: {
     backgroundColor: Colors.white,
-    padding: 5,
-    borderRadius: 10,
-    marginRight: 5,
-    borderColor: Colors.placeholder,
+    paddingVertical: moderateScale(8),
+    paddingHorizontal: moderateScale(12),
+    borderRadius: moderateScale(8),
     borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: Colors.border,
   },
   categoryActive: {
-    backgroundColor: '#1E88E5',
-    padding: 10,
-    borderRadius: 10,
-    marginRight: 5,
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   categoryText: {
-    color: Colors.placeholder,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+    color: Colors.textSecondary,
   },
-
-  courseCard: {
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
-    padding: 10,
-    borderRadius: 10,
+  categoryTextActive: {
+    color: Colors.white,
   },
-  courseImage: {
-    width: '100%',
-    height: 150,
-    borderRadius: 20,
-  },
-
-  newCourseBadge: {
-    position: 'absolute',
-    top: 20,
-    left: 250,
+  featuredCard: {
     backgroundColor: Colors.white,
-    padding: 5,
-    borderRadius: 10,
+    borderRadius: moderateScale(12),
+    overflow: "hidden",
+    marginBottom: moderateScale(20),
+    elevation: 2,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  newCourseText: {
-    fontWeight: 'bold',
+  featuredImage: {
+    width: "100%",
+    height: moderateScale(180),
+    justifyContent: "flex-end",
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
+  featuredBadge: {
+    position: "absolute",
+    top: moderateScale(12),
+    right: moderateScale(12),
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: moderateScale(6),
+    borderRadius: moderateScale(20),
   },
-  starIcon: {
-    color: '#D97706',
+  featuredContent: {
+    padding: moderateScale(16),
   },
-  completeProfileContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 15,
+  featuredTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: "bold",
+    color: Colors.text,
+    marginBottom: moderateScale(8),
   },
-  completeProfileContainer1: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 15,
-    marginTop: 20,
+  featuredDescription: {
+    fontSize: moderateScale(14),
+    color: Colors.textSecondary,
+    marginBottom: moderateScale(12),
+  },
+  featuredMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: moderateScale(4),
+  },
+  metaText: {
+    fontSize: moderateScale(12),
+    color: Colors.textSecondary,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: moderateScale(12),
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: moderateScale(18),
+    fontWeight: "bold",
+    color: Colors.text,
   },
   viewAllText: {
-    color: Colors.placeholder,
-    fontWeight: 'bold',
+    fontSize: moderateScale(14),
+    color: Colors.primary,
+    fontWeight: "500",
   },
-  readingCourse: {
+  materialList: {
+    paddingBottom: moderateScale(16),
+  },
+  materialItem: {
+    backgroundColor: Colors.white,
+    borderRadius: moderateScale(10),
+    padding: moderateScale(12),
+    marginBottom: moderateScale(10),
+    flexDirection: "row",
+    alignItems: "center",
+    elevation: 1,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  materialIconContainer: {
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
+    backgroundColor: Colors.lightPrimary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: moderateScale(12),
+  },
+  materialInfo: {
     flex: 1,
-    marginTop: 10,
-    flexDirection: 'row',
   },
-  courseItem: {
-    backgroundColor: Colors.white,
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
+  materialTitle: {
+    fontSize: moderateScale(16),
+    fontWeight: "600",
+    color: Colors.text,
+    marginBottom: moderateScale(4),
   },
-  courseItem2: {
-    backgroundColor: Colors.white,
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    width: 150,
+  materialDescription: {
+    fontSize: moderateScale(12),
+    color: Colors.textSecondary,
+    marginBottom: moderateScale(6),
   },
-  courseTextContainer: {
-    flex: 1,
+  materialMeta: {
+    flexDirection: "row",
+    gap: moderateScale(12),
   },
-  courseTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    margin: 5,
+  materialDuration: {
+    fontSize: moderateScale(12),
+    color: Colors.textSecondary,
+    backgroundColor: Colors.lightGray,
+    paddingHorizontal: moderateScale(6),
+    paddingVertical: moderateScale(2),
+    borderRadius: moderateScale(4),
   },
-  tagsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  courseDurationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-    gap: 5,
-  },
-  courseDuration: {
-    fontSize: 14,
-    color: 'gray',
-  },
-  courseTags: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  courseCategory: {
-    backgroundColor: Colors.white,
-    padding: 3,
-    borderRadius: 5,
-    borderColor: Colors.placeholder,
-    borderWidth: 1,
-    marginRight: 10,
-    fontSize: 14,
-    fontWeight: 'semibold',
-    color: Colors.placeholder,
+  materialCourse: {
+    fontSize: moderateScale(12),
+    color: Colors.textSecondary,
   },
   downloadButton: {
-    backgroundColor: Colors.white,
-    padding: 5,
-    borderRadius: 5,
-    borderColor: Colors.placeholder,
-    borderWidth: 1,
+    padding: moderateScale(8),
   },
-  downloadText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.9)",
   },
-
-  rows: {
-    justifyContent: 'space-between',
+  videoContainer: {
+    marginHorizontal: 20,
+    borderRadius: 10,
+    overflow: "hidden",
   },
-  //   courseItem: {
-  //     backgroundColor: "#fff",
-  //     padding: 15,
-  //     borderRadius: 10,
-  //     marginBottom: 10,
-  //     shadowColor: "#000",
-  //     shadowOpacity: 0.1,
-  //     shadowRadius: 5,
-  //     elevation: 2,
-  //   },
-  //   courseTitle: {
-  //     fontSize: 16,
-  //     fontWeight: "bold",
-  //   },
-  courseDescription: {
-    fontSize: 14,
-    color: 'gray',
-  },
-  openButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#e0e0e0',
-    padding: 5,
+  closeButton: {
+    marginTop: 20,
+    alignSelf: "center",
+    padding: 10,
+    backgroundColor: Colors.primary,
     borderRadius: 5,
   },
-  openText: {
+  closeButtonText: {
+    color: Colors.white,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });
 

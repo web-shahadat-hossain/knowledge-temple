@@ -19,7 +19,9 @@ export const apiUrls = {
     logout: "/user/logout",
     changePassword: "/user/changePassword",
     forgotPassword: "/user/forgotPassword",
+    notifications: "/user/notifications",
   },
+  getCourses: "/user/course/getCourses",
   course: {
     getCourseList: "/user/course/getCourses",
     getCourseDetails: "/user/course/getCourseDetail",

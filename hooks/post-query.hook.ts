@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import apiClient from '../apis/api-client';
-import logger from '../utils/logger';
+import { useState } from "react";
+import apiClient from "../apis/api-client";
+import logger from "../utils/logger";
 
 const headers = {
-  'Content-Type': 'application/json',
+  "Content-Type": "application/json",
 };
 
 const usePostQuery = () => {
@@ -15,10 +15,10 @@ const usePostQuery = () => {
     const {
       url,
       onSuccess = () => {
-        logger.log('onSuccess function');
+        logger.log("onSuccess function");
       },
       onFail = () => {
-        logger.log('onFail function');
+        logger.log("onFail function");
       },
       postData,
     } = params;
@@ -29,10 +29,10 @@ const usePostQuery = () => {
       });
       setData(apiData);
       await onSuccess(apiData);
-      logger.log(apiData, 'postQuery-success');
+      logger.log(apiData, "postQuery-success");
     } catch (err: any) {
       onFail(err);
-      logger.log(err, 'postQuery-fail');
+      logger.log(err, "postQuery-fail");
       setError(err);
       //   setData();
     } finally {
